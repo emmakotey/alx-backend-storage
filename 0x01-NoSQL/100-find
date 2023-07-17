@@ -1,0 +1,3 @@
+// A script that lists all documents with a name starting by Holberton
+// in the school collection
+db.school.find({"name": { $regex: /^Holberton/ }})

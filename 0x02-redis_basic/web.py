@@ -1,33 +1,36 @@
 #!/usr/bin/env python3
-""" Implementing an expiring web cache and tracker
-    obtain the HTML content of a particular URL and returns it """
-import redis
+"""
+web cache and tracker
+"""
 import requests
+import redis
+from functools import wraps
 
-r = redis.Redis()
+store = redis.Redis()
 
 
+def count_url_access(method):
+    """ Decorator counting how many times
+    a URL is accessed """
+    @wraps(method)
+    def wrapper(url):
+        cached_key = "cached:" + url
+        cached_data = store.get(cached_key)
+        if cached_data:
+            return cached_data.decode("utf-8")
+
+        count_key = "count:" + url
+        html = method(url)
+
+        store.incr(count_key)
+        store.set(cached_key, html)
+        store.expire(cached_key, 10)
+        return html
+    return wrapper
+
+
+@count_url_access
 def get_page(url: str) -> str:
-    """ Track how many times a particular URL was accessed in the key
-        "count:{url}" and cache thei expiration time of 10 seconds """
-    count_key = f"count:{url}"
-    cached_key = f"cached:{url}"
-
-    # Increment the count
-    r.incr(count_key)
-    count = r.get(count_key)
-
-    # Cache the result with an expiration time of 10 seconds
-    if r.exists(cached_key):
-        return r.get(cached_key).decode("utf-8")
-
-    resp = requests.get(url)
-    r.setex(cached_key, 10, resp.text)
-
-    return resp.text
-
-
-if __name__ == "__main__":
-    # Call get_page with the URLs to cache them
-    get_page('http://google.com')
-    get_page('http://slowwly.robertomurray.co.uk')
+    """ Returns HTML content of a url """
+    res = requests.get(url)
+    return res.text
